@@ -55,8 +55,9 @@ python seals_counter_cli.py
 ## Step 4: Follow the Prompt
 
 When the program runs, it will ask you to **provide a folder path** within the repository. Simply type the path and press `Enter` when prompted. 
-There is currently an existing folder in this repository named "beach_images" with 2 beaches already uploaded. 
-To have our model run on new images, upload new images into that folder, type in "beach_images" when prompted for a folder, and be patient!
+There is currently an existing folder in this repository named "beach_images" with 2 beaches already uploaded as examples. 
+To have this model run on new images, upload new beach images into that folder, type in "beach_images" when prompted for a folder, and be patient!
+Please assure that new images are formatted in one of the following file extensions: `.jpeg` `.png` `.jpg` `.tif` `.tiff`
 
 ---
 
