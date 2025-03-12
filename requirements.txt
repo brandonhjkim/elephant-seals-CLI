@@ -1,6 +1,6 @@
-roboflow
-joblib
-numpy
-pandas
-pillow
-scikit-learn
+roboflow==1.1.56
+joblib==1.4.2
+numpy==2.2.3
+pandas==2.2.3
+pillow==11.1.0
+scikit-learn==1.6.1
