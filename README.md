@@ -71,5 +71,8 @@ If you need further help, feel free to open an issue on this repository!
 
 ---
 
+## Additional Info
+Please do not change the assets folder or the .gitignore file! They are essential to making sure this repository functions and updates properly! 
+
 Enjoy using **Seal Counter CLI**!
 
