@@ -14,7 +14,7 @@ Before you start, ensure you have:
 If you don't have Python installed:
 
 1. Visit the official Python website: [https://www.python.org/downloads/](https://www.python.org/downloads/)
-2. Download the latest version within **3.8 to 3.12** for your operating system.
+2. Download a version within **3.8 to 3.12** for your operating system (This program was built using **Python 3.10.4** so we recommend using that)
 3. Run the installer and **check the box** that says `Add Python to PATH` before clicking `Install Now`.
 4. Verify the installation:
    - Open a terminal (Command Prompt, PowerShell, or Terminal)
