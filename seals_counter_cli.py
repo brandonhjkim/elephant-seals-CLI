@@ -91,6 +91,8 @@ def get_heuristics(dct):
     avg_b = []
     sd_b = [] 
 
+    keys = []
+
     for key, clump_lst in dct.items():
 
         for idx, clump in enumerate(clump_lst): 
@@ -109,7 +111,9 @@ def get_heuristics(dct):
             avg_b.append(np.mean(img_array[:, :, 1]))
             sd_b.append(np.std(img_array[:, :, 1]))
 
-    return pd.DataFrame({'key': key, 'width': widths, 
+            keys.append(key)
+
+    return pd.DataFrame({'key': keys, 'width': widths,
                         'height': heights, 'avg_r': avg_r, 
                         'sd_r': sd_r, 'avg_g': avg_g,
                         'sd_g': sd_g,'avg_b': avg_b,
@@ -144,6 +148,7 @@ def main():
 
     for key, value in indivs.items():
         print(f'{key} Number of Seals: {value}')
+    print("In total, we have", sum(indivs.values()), "seals")
 
 if __name__ == "__main__":
     main()
