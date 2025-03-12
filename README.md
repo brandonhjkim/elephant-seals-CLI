@@ -30,7 +30,7 @@ If you don't have Python installed:
 
 1. Open a terminal and navigate to the project folder (where `seals_counter_cli.py` is located):
    ```sh
-   cd path/to/your/repository
+   cd path/to/this/repository
    ```
 2. Create a virtual environment:
    ```sh
