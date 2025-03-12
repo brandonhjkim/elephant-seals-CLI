@@ -34,10 +34,11 @@ If you don't have Python installed:
    ```
 2. Create a virtual environment:
    ```sh
-   python -m venv venv
+   python -m venv .venv
    ```
 3. Install the required dependencies:
    ```sh
+   .venv\Scripts\activate
    pip install -r requirements.txt
    ```
 
@@ -49,6 +50,11 @@ Once the virtual environment is set up, run the program using:
 ```sh
 python seals_counter_cli.py
 ```
+If you're returning to this program, and you've already set up the virtual environment on your computer (Step 2.), you need to run:
+```sh
+.venv\Scripts\activate
+```
+to reactive the virtual environment before running the program again. 
 
 ---
 
