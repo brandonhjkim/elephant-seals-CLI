@@ -58,6 +58,8 @@ When the program runs, it will ask you to **provide a folder path** within the r
 There is currently an existing folder in this repository named "beach_images" with 2 beaches already uploaded as examples. 
 To have this model run on new images, upload new beach images into that folder, type in "beach_images" when prompted for a folder, and be patient!
 
+You can also upload a new folder of images that you can specify for this program to run with. 
+
 Please make sure that new images are formatted in one of the following file extensions: `.jpeg` `.png` `.jpg` `.tif` `.tiff`
 
 ---
