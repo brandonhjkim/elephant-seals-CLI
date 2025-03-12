@@ -84,3 +84,5 @@ Please do not change the assets folder or the .gitignore file! They are essentia
 
 Enjoy using **Seal Counter CLI**!
 
+And make sure to check out ![this repository](https://github.com/ishaansathaye/elephant-seals-detection?tab=readme-ov-file) for the web app interface!
+
