@@ -1,0 +1,251 @@
+Set up 
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(parsnip)
+```
+
+Reading csv's
+
+```{r}
+heuristics <- read.csv("heuristics.csv")
+seals_count <- read.csv("seals_count.csv")
+```
+
+Joining data 
+
+```{r}
+full <- heuristics %>%
+  inner_join(seals_count, by = join_by(key == clump)) %>%
+  drop_na()
+```
+
+Seeing random guess MAE 
+
+```{r}
+full %>% 
+  ggplot(aes(x = Total.Number.of.Seals)) +
+  geom_histogram(binwidth = 1, fill='#dafea4', color='black') +
+  theme_bw() +
+  labs(y = "")
+
+full %>% 
+  summarize(mean(Total.Number.of.Seals), 
+            median(Total.Number.of.Seals), 
+            sd(Total.Number.of.Seals))
+```
+
+
+```{r}
+full %>% 
+  mutate(error = abs(Total.Number.of.Seals - mean(Total.Number.of.Seals))) %>%
+  summarize(mean(error))
+
+full %>% 
+  mutate(error = abs(Total.Number.of.Seals - median(Total.Number.of.Seals))) %>%
+  summarize(mean(error))
+```
+
+Recipe + cross validation setup 
+
+```{r}
+set.seed(451)
+
+rec <- recipe(Total.Number.of.Seals ~ height+width+avg_r+avg_b+avg_g+sd_r+sd_g+sd_b, data=full) %>%
+  step_normalize(all_nominal_predictors())
+
+folds <- vfold_cv(full, v = 5)
+```
+
+Random Forest Grid Tuning 
+
+```{r}
+set.seed(451)
+
+rf_spec <- rand_forest(mtry=tune()) %>%
+  set_engine("ranger",importance = "permutation") %>%
+  set_mode("regression")
+
+rf_grid <- grid_regular(mtry(range = c(1, 8)), levels=8)
+
+rf_wflow <- workflow() %>%
+  add_model(rf_spec) %>%
+  add_recipe(rec)
+
+rf_grid_search <-
+  tune_grid(
+    rf_wflow,
+    resamples = folds,
+    grid = rf_grid,
+    metrics = metric_set(mae)
+  )
+
+rf_grid_search %>%
+  collect_metrics() %>%
+  arrange(mean)
+```
+
+XGBoost fit 
+
+```{r}
+xgb_spec <- boost_tree() %>%
+  set_engine("xgboost") %>%
+  set_mode("regression")
+
+xgb_wflow <- workflow() %>%
+  add_model(xgb_spec) %>%
+  add_recipe(rec)
+
+xgb_cv <- fit_resamples(xgb_wflow, resamples = folds, metrics = metric_set(mae))
+
+estimates <- c()
+for (fold_metric in xgb_cv$.metrics) estimates <- c(estimates, fold_metric$.estimate)
+
+mean(estimates)
+```
+
+KNN tuning 
+
+```{r}
+knn_spec <- nearest_neighbor(neighbors=tune()) %>%
+  set_engine("kknn") %>%
+  set_mode("regression")
+
+knn_grid <- grid_regular(neighbors(range = c(2, 20)), levels=19)
+
+knn_wflow <- workflow() %>%
+  add_model(knn_spec) %>%
+  add_recipe(rec)
+
+knn_grid_search <-
+  tune_grid(
+    knn_wflow,
+    resamples = folds,
+    grid = knn_grid,
+    metrics = metric_set(mae)
+  )
+
+knn_grid_search %>%
+  collect_metrics() %>%
+  arrange(mean)
+```
+
+Linear Regression Fit 
+
+```{r}
+lm_spec <- linear_reg() %>%
+  set_engine("lm") %>%
+  set_mode("regression")
+
+lm_wflow <- workflow() %>%
+  add_model(lm_spec) %>%
+  add_recipe(rec)
+
+lm_cv <- fit_resamples(lm_wflow, resamples = folds, metrics = metric_set(mae))
+
+estimates <- c()
+for (fold_metric in lm_cv$.metrics) estimates <- c(estimates, fold_metric$.estimate)
+
+mean(estimates)
+```
+
+Linear Regression Fit with Interaction 
+
+```{r}
+lm_spec2 <- linear_reg() %>%
+  set_engine("lm") %>%
+  set_mode("regression")
+
+lm_wflow2 <- workflow() %>%
+  add_model(lm_spec) %>%
+  add_recipe(step_interact(rec, terms = ~width:height))
+
+lm_cv2 <- fit_resamples(lm_wflow2, resamples = folds, metrics = metric_set(mae))
+
+estimates <- c()
+for (fold_metric in lm_cv2$.metrics) estimates <- c(estimates, fold_metric$.estimate)
+
+mean(estimates)
+```
+
+Final Models
+
+```{r}
+set.seed(451)
+splt <- initial_split(full, prop=0.8, strata=Total.Number.of.Seals)
+training_data <- training(splt)
+test_data <- testing(splt)
+
+rec_actual <- recipe(Total.Number.of.Seals ~ height+width+avg_r+avg_b+avg_g+sd_r+sd_g+sd_b, data=full) 
+```
+
+
+```{r}
+set.seed(451)
+rf_spec <- rand_forest(mtry=6) %>%
+  set_engine("ranger",importance = "permutation") %>%
+  set_mode("regression")
+
+mod_fit_rf <- workflow() %>%
+  add_model(rf_spec) %>%
+  add_recipe(rec_actual) %>%
+  fit(training_data)
+
+test_data <- test_data %>%
+  mutate(preds_rf = predict(mod_fit_rf, test_data)$.pred)
+
+test_data %>%
+  metrics(truth = Total.Number.of.Seals, 
+          estimate = preds_rf)
+```
+
+
+```{r}
+rec_actual <- recipe(Total.Number.of.Seals ~ height+width+avg_r+avg_b+avg_g+sd_r+sd_g+sd_b, data=full) 
+
+knn_spec <- nearest_neighbor(neighbors=3) %>%
+  set_engine("kknn") %>%
+  set_mode("regression")
+
+mod_fit_knn <- workflow() %>%
+  add_model(knn_spec) %>%
+  add_recipe(rec_actual) %>%
+  fit(training_data)
+
+test_data <- test_data %>%
+  mutate(preds_knn = predict(mod_fit_knn, test_data)$.pred)
+
+test_data %>%
+  metrics(truth = Total.Number.of.Seals, 
+          estimate = preds_knn)
+```
+
+
+```{r}
+test_data %>% 
+  group_by(Total.Number.of.Seals) %>%
+  summarize(correct_preds_rf = sum(Total.Number.of.Seals == round(preds_rf))/n(), 
+            avg_guess_rf = mean(preds_rf), 
+            correct_preds_knn = sum(Total.Number.of.Seals == round(preds_knn))/n(),
+            avg_guess_knn = mean(preds_knn), 
+            counts = n())
+```
+
+VIP 
+
+```{r}
+rf_model <- extract_fit_parsnip(mod_fit_rf)$fit
+vip::vip(rf_model) +
+  theme_bw() +
+  labs(title = "Random Forest Variable Importance Plot")
+  
+```
+
+
+
+
+
+
+
+

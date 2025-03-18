@@ -30,14 +30,15 @@ If you don't have Python installed:
 
 1. Open a terminal and navigate to the project folder (where `seals_counter_cli.py` is located):
    ```sh
-   cd path/to/your/repository
+   cd path/to/this/repository
    ```
 2. Create a virtual environment:
    ```sh
-   python -m venv venv
+   python -m venv .venv
    ```
 3. Install the required dependencies:
    ```sh
+   .venv\Scripts\activate
    pip install -r requirements.txt
    ```
 
@@ -49,6 +50,11 @@ Once the virtual environment is set up, run the program using:
 ```sh
 python seals_counter_cli.py
 ```
+If you're returning to this program, and you've already set up the virtual environment on your computer (Step 2.), you need to run:
+```sh
+.venv\Scripts\activate
+```
+to reactive the virtual environment before running the program again. 
 
 ---
 
@@ -77,4 +83,8 @@ If you need further help, feel free to open an issue on this repository!
 Please do not change the assets folder or the .gitignore file! They are essential to making sure this repository functions and updates properly! 
 
 Enjoy using **Seal Counter CLI**!
+
+## Web App
+
+Make sure to check out [this repository](https://github.com/ishaansathaye/elephant-seals-detection?tab=readme-ov-file) for the web app interface!
 
