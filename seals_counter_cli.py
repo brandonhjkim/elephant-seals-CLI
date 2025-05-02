@@ -7,23 +7,48 @@ import os
 from collections import Counter 
 from pathlib import Path
 
-def input_folder(): 
-    folder_name = input('Enter the name of an existing folder in the repository: ').strip()
-    folder_path = os.path.join(os.getcwd(), folder_name)
+def input_folder():
+    """
+    Prompts the user to choose a folder from a mounted base directory.
+    The base directory is taken from the environment variable BASE_DIR.
+    The user can enter the name of any subfolder within BASE_DIR.
+    """
+    print()
+    base_dir = os.environ.get("BASE_DIR")
+    if base_dir is None:
+        raise ValueError("Please set the BASE_DIR environment variable.")
+    
+    # Display the base directory and its subdirectories for the user to choose from.
+    # print(f"Mounted base directory: {base_dir}")
+    print()
+    print("Available subdirectories:")
+    entries = os.listdir(base_dir)
+    subdirs = [entry for entry in entries if os.path.isdir(os.path.join(base_dir, entry))]
+    if not subdirs:
+        print("|- No subdirectories found in the base directory.")
+    else:
+        for sub in subdirs:
+            print(f"|- {sub}")
+    
+    print()
+    folder_name = input('Enter the name of an existing folder from the mounted directory (or type "exit" to quit): ').strip()
+    if folder_name.lower() == "exit":
+        return None  # Signal to exit
 
+    # Use the BASE_DIR as the base for relative paths.
+    folder_path = os.path.join(base_dir, folder_name)
     if not os.path.isdir(folder_path):
-        raise ValueError(f"The folder '{folder_name}' does not exist in the repository.")
-
+        raise ValueError(f"The folder '{folder_path}' does not exist.")
+    
     def is_image_file(filename):
         image_extensions = {'.png', '.jpg', '.jpeg', '.tif', '.tiff'}
         return any(filename.lower().endswith(ext) for ext in image_extensions)
-
+    
     files = os.listdir(folder_path)
     if not all(is_image_file(file) for file in files if os.path.isfile(os.path.join(folder_path, file))):
         raise ValueError(f"The folder '{folder_name}' contains non-image files.")
-
-    print(f"Folder '{folder_name}' is valid and contains only image files. Running the detection model...")
     
+    print(f"Folder '{folder_path}' is valid. Running the detection model...")
     return folder_path
 
 def get_indivs_and_clumps(model, paths, seal_conf_lvl, clump_conf_lvl, overlap): 
@@ -121,47 +146,42 @@ def get_heuristics(dct):
 
 def main(): 
 
-    rf = Roboflow('132cxQxyrOVmPD63wJrV') # api keys are individual, change to your own
+    api_key = os.environ.get('ROBOFLOW_API_KEY')
+    if api_key is None:
+        raise ValueError("Please set the ROBOFLOW_API_KEY environment variable.")
+    rf = Roboflow(api_key=api_key) # api keys are individual, change to your own
     project = rf.workspace().project('elephant-seals-project-mark-1')
     model = project.version('16').model
 
-    path_to_beach_imgs = input_folder() 
-    beach_imgs_paths = [os.path.join(path_to_beach_imgs, file) for file in os.listdir(path_to_beach_imgs)]
+    while True:
+        path_to_beach_imgs = input_folder()
+        if path_to_beach_imgs is None:
+            print("Exiting the program.")
+            break
 
-    # our preset values of min confidence and overlap, based on vibes
-    clumps, indivs = get_indivs_and_clumps(model, beach_imgs_paths, seal_conf_lvl = 20, clump_conf_lvl = 40, overlap = 20) 
+        beach_imgs_paths = [os.path.join(path_to_beach_imgs, file) for file in os.listdir(path_to_beach_imgs)]
 
-    clumps = {key: value for key, value in clumps.items() if len(value) >= 10}
+        # our preset values of min confidence and overlap, based on vibes
+        clumps, indivs = get_indivs_and_clumps(model, beach_imgs_paths, seal_conf_lvl = 20, clump_conf_lvl = 40, overlap = 20) 
 
-    if len(clumps) != 0: 
+        clumps = {key: value for key, value in clumps.items() if len(value) >= 10}
 
-        df_heur = get_heuristics(clumps)
+        if len(clumps) != 0:
 
-        clump_model = load('assets/random_forest_mod1.joblib')
+            df_heur = get_heuristics(clumps)
 
-        X = df_heur.drop(columns = 'key')
-        df_heur['pred_y'] = clump_model.predict(X) 
+            clump_model = load('assets/random_forest_mod1.joblib')
 
-        clump_sums = df_heur.groupby('key')['pred_y'].sum().to_dict()
+            X = df_heur.drop(columns = 'key')
+            df_heur['pred_y'] = clump_model.predict(X) 
 
-        indivs = dict(Counter(indivs) + Counter(clump_sums)) 
+            clump_sums = df_heur.groupby('key')['pred_y'].sum().to_dict()
 
-    for key, value in indivs.items():
-        print(f'{key} Number of Seals: {value}')
-    print("In total, we have", sum(indivs.values()), "seals")
+            indivs = dict(Counter(indivs) + Counter(clump_sums)) 
+
+        for key, value in indivs.items():
+            print(f'{key} Number of Seals: {value}')
+        print("In total, we have", sum(indivs.values()), "seals")
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-    
-
-    
