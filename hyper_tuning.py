@@ -1,3 +1,14 @@
+"""
+Inputs: 
+    Directories of images of beaches
+    A .csv file for ground truths of all images. Should only have 2 columns: 'Image' and 'Results'
+    Minimum and maximum for hyperparameters (will iterate over int)
+
+Printed Output:
+    Results from hyperparameter tuning, with best combination of hyperparameters subsetted by each beach. 
+    It currently utilizes average percent error as metric 
+"""
+
 from roboflow import Roboflow
 from PIL import Image
 from joblib import load 
@@ -8,7 +19,7 @@ from collections import Counter
 from pathlib import Path
 
 def input_folder(): 
-    folder_name = input('Enter the name of an existing folder in the repository: ').strip()
+    folder_name = input('Enter the name of one existing folder in the repository: ').strip()
     folder_path = os.path.join(os.getcwd(), folder_name)
 
     if not os.path.isdir(folder_path):
@@ -22,9 +33,9 @@ def input_folder():
     if not all(is_image_file(file) for file in files if os.path.isfile(os.path.join(folder_path, file))):
         raise ValueError(f"The folder '{folder_name}' contains non-image files.")
 
-    print(f"Folder '{folder_name}' is valid and contains only image files. Running the detection model...")
+    print(f"Folder '{folder_name}' is valid and contains only image files.")
     
-    return folder_path
+    return folder_path, folder_name
 
 def get_indivs_and_clumps(model, paths, seal_conf_lvl, clump_conf_lvl, overlap): 
     clump_imgs_dct = {} # dictionary of clumps. image id will be the key and a list of clumps will be its value. 
@@ -95,7 +106,7 @@ def get_heuristics(dct):
 
     for key, clump_lst in dct.items():
 
-        for idx, clump in enumerate(clump_lst): 
+        for _, clump in enumerate(clump_lst): 
         
             width, height = clump.size
 
@@ -119,25 +130,17 @@ def get_heuristics(dct):
                         'sd_g': sd_g,'avg_b': avg_b,
                         'sd_b': sd_b})
 
-def main(): 
+def single_run(model, filenames, seal_conf_lvl, clump_conf_lvl, overlap, clump_num): 
 
-    rf = Roboflow('132cxQxyrOVmPD63wJrV') # api keys are individual, change to your own
-    project = rf.workspace().project('elephant-seals-project-mark-1')
-    model = project.version('16').model
+    clumps, indivs = get_indivs_and_clumps(model, filenames, seal_conf_lvl = 20, clump_conf_lvl = 40, overlap = 20) 
 
-    path_to_beach_imgs = input_folder() 
-    beach_imgs_paths = [os.path.join(path_to_beach_imgs, file) for file in os.listdir(path_to_beach_imgs)]
-
-    # our preset values of min confidence and overlap, based on vibes
-    clumps, indivs = get_indivs_and_clumps(model, beach_imgs_paths, seal_conf_lvl = 20, clump_conf_lvl = 40, overlap = 20) 
-
-    clumps = {key: value for key, value in clumps.items() if len(value) >= 10}
+    clumps = {key: value for key, value in clumps.items() if len(value) >= clump_num}
 
     if len(clumps) != 0: 
 
-        df_heur = get_heuristics(clumps)
-
         clump_model = load('assets/random_forest_mod1.joblib')
+
+        df_heur = get_heuristics(clumps)
 
         X = df_heur.drop(columns = 'key')
         df_heur['pred_y'] = clump_model.predict(X) 
@@ -146,9 +149,66 @@ def main():
 
         indivs = dict(Counter(indivs) + Counter(clump_sums)) 
 
-    for key, value in indivs.items():
-        print(f'{key} Number of Seals: {value}')
-    print("In total, we have", sum(indivs.values()), "seals")
+    return indivs        
+
+def main(): 
+
+    rf = Roboflow('132cxQxyrOVmPD63wJrV') # api keys are individual, change to your own
+    project = rf.workspace().project('elephant-seals-project-mark-1')
+    model = project.version('16').model
+
+    img_dir_dct = {}
+
+    num_beaches = input('Enter Number of Beaches to Run Tuning (each beach must have its own subdirectory of images):')
+
+    for _ in range(int(num_beaches)): 
+        path_to_beach_imgs, folder_name = input_folder() 
+        img_dir_dct[folder_name] = [os.path.join(path_to_beach_imgs, file) for file in os.listdir(path_to_beach_imgs)]
+
+    ground_truth_file = input('Enter .csv file for ground truth')
+    df_gt = pd.read_csv(ground_truth_file)
+
+    seal_conf_min = input('Seal Confidence Hyperparameter Minimum')
+    seal_conf_max = input('Seal Confidence Hyperparameter Maximum')
+    clump_conf_min = input('Clump Confidence Hyperparameter Minimum')
+    clump_conf_max = input('Clump Confidence Hyperparameter Maximum')
+    overlap_min = input('Overlap Hyperparameter Minimum')
+    overlap_max = input('Overlap Hyperparameter Maximum')
+    clump_num_min = input('Two Prong Approach Minimum')
+    clump_num_max = input('Two Prong Approach Maximum')
+
+    results_bool = input('Write Results? Enter Y or N')
+
+    full_metrics = pd.DataFrame(columns=['Image', 'Results', 'Seal Conf Lvl', 
+                                         'Clump Conf Lvl', 'Overlap', 'Clump Threshold'])
+
+    for seal_conf_lvl in range(seal_conf_min, seal_conf_max+1):
+        for clump_conf_lvl in range(clump_conf_min, clump_conf_max+1):
+            for overlap in range(overlap_min, overlap_max+1):
+                for clump_num in range(clump_num_min, clump_num_max+1):
+                    for beach, imgs in img_dir_dct.items():
+
+                        results = single_run(model, imgs, seal_conf_lvl, clump_conf_lvl, overlap, clump_num)
+
+                        df_results = pd.DataFrame(list(results.items()), columns=['Image', 'Results'])
+                        df_results['Seal Conf Lvl'] = seal_conf_lvl
+                        df_results['Clump Conf Lvl'] = clump_conf_lvl
+                        df_results['Overlap'] = overlap
+                        df_results['Clump Threshold'] = clump_num 
+
+                        full_metrics = pd.concat(full_metrics, results) 
+
+    full_metrics = pd.merge(full_metrics, df_gt, on='Image', how='left')
+
+    full_metrics['Percent Diff'] = np.abs((full_metrics['Results']-full_metrics['Ground Truth'])/full_metrics['Ground Truth']) 
+
+    if results_bool == 'Y':
+        full_metrics.to_csv('full_metrics.csv', index=False)
+
+    per_error = full_metrics.groupby(['Seal Conf Lvl', 'Clump Conf Lvl', 'Overlap', 'Clump Threshold', 'Beach'])['Percent Diff'].mean()
+
+    print(per_error.groupby('Beach')['Percent Diff'].min())
+       
 
 if __name__ == "__main__":
     main()
