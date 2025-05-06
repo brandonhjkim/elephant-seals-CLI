@@ -1,12 +1,12 @@
 """
 Inputs: 
-    Directories of images of beaches
+    Directories of images of beaches, 1 for each beach 
     A .csv file for ground truths of all images. Should only have 2 columns: 'Image' and 'Ground Truth'
     Minimum and maximum for hyperparameters (will iterate over int)
 
 Printed Output:
     Results from hyperparameter tuning, with best combination of hyperparameters subsetted by each beach. 
-    It currently utilizes median percent error as metric 
+    Script currently utilizes median percent error as metric 
 """
 
 from roboflow import Roboflow
@@ -70,7 +70,6 @@ def get_heuristics(lst):
     for clump in lst: 
         
         width, height = clump.size
-
         widths.append(width)
         heights.append(height)
 
@@ -94,9 +93,9 @@ def fine_tune(model, clump_model, beach_dct, seal_conf, clump_conf, overlap_lst,
                                          'Clump Conf Lvl', 'Overlap', 'Clump Threshold'])
 
     # counter stats 
-    it = 0.0 
+    it = 0
     total = len(seal_conf)*len(clump_conf)*len(overlap_lst)*len(clump_thresh)*len(beach_dct) 
-    chkpt = 0.1 
+    chkpt_mark = 0.1 
 
     print(f'{int(total/len(beach_dct))} Possible Combinations')
 
@@ -107,74 +106,93 @@ def fine_tune(model, clump_model, beach_dct, seal_conf, clump_conf, overlap_lst,
             # overlap params 
             for o in overlap_lst:
 
-                image = Image.open(path)
-
                 # overlap is only hyperparam that needs to specified prior to eval (so only needs to access api # of possible overlap params * length of test set)
                 preds = model.predict(path, confidence=0, overlap=o).json().get('predictions', []) 
 
-                # iterating through possible clump conf params 
-                for c in clump_conf: 
-                    clumps = [pred for pred in preds if pred['class'] == 'clump' and pred['confidence'] > c / 100]
+                image = Image.open(path)
 
-                    clump_imgs = [] 
-                    for clump in clumps:
-                        clump_x1 = clump['x'] - clump['width'] / 2
-                        clump_x2 = clump['x'] + clump['width'] / 2
-                        clump_y1 = clump['y'] - clump['height'] / 2
-                        clump_y2 = clump['y'] + clump['height'] / 2
+                clumps_img_dct = {} # images dict, conf as key 
+                clumps_pos_dct = {} # saving raw data as well, for intersections for indiv seals, conf as key  
+                for pred in preds: 
+                    if pred['class'] == 'clump':
+                        clump_x1 = pred['x'] - pred['width'] / 2
+                        clump_x2 = pred['x'] + pred['width'] / 2
+                        clump_y1 = pred['y'] - pred['height'] / 2
+                        clump_y2 = pred['y'] + pred['height'] / 2
 
-                        top_left_clump = (clump_x1, clump_y1)
-                        bottom_right_clump = (clump_x2, clump_y2)
+                        # saving cropped img 
+                        clumps_img_dct[pred['confidence'] / 100] = image.crop((*(clump_x1, clump_y1), *(clump_x2, clump_y2)))
+                        # saving raw 
+                        clumps_pos_dct[pred['confidence'] / 100] = pred
 
-                        subimage = image.crop((*top_left_clump, *bottom_right_clump))
-                        
-                        clump_imgs.append(subimage)
+                for c in clump_conf:
+                    
+                    # iterating across dicts, with confidence as key 
+                    valid_clump_imgs = [clump_img for conf, clump_img in clumps_img_dct.items() if conf >= c]
+                    valid_clump_pos = [clump_pos for conf, clump_pos in clumps_pos_dct.items() if conf >= c]
 
                     # iterating through possible seal conf params 
                     for s in seal_conf: 
 
+                        # indiviudal seals 
                         seals = [pred for pred in preds if pred['class'] == 'seals' and pred['confidence'] > s / 100]
-                        filtered_seals = [seal for seal in seals if not any(intersects(seal, clump) for clump in clumps)]
+                        # checking intersections with clumps 
+                        filtered_seals = [seal for seal in seals if not any(intersects(seal, clump) for clump in valid_clump_pos)]
 
-                        # setting key for individual seals dict 
+                        # num of indivs 
                         indivs = len(filtered_seals) 
 
-                        # iterating through clump threshold params 
-                        for ct in clump_thresh: 
+                        # for thresholds above and below the num of clumps 
+                        above_len_imgs = [t for t in clump_thresh if t >= len(valid_clump_imgs)]
+                        below_len_imgs = [t for t in clump_thresh if t < len(valid_clump_imgs)]
+                        a = len(above_len_imgs)
+                        b = len(below_len_imgs) 
 
-                            # check if there exists clumps 
-                            if len(clump_imgs) >= ct: 
+                        # for thresholds that are greater than # of clumps
+                        if a > 0: 
+                            no_rf = pd.DataFrame({
+                                'Beach': [beach]*a, 
+                                'Image': [Path(path).stem]*a,
+                                'Results': [indivs]*a,
+                                'Seal Conf Lvl': [s]*a,
+                                'Clump Conf Lvl': [c]*a,
+                                'Overlap': [o]*a,
+                                'Clump Threshold': above_len_imgs
+                            }) 
+                        # empty set if no thresholds 
+                        else: 
+                            no_rf = pd.DataFrame(columns=full_metrics.columns) 
 
-                                # heuristics 
-                                df_heur = get_heuristics(clump_imgs)
+                        # for thresholds that are less than # of clumps  
+                        if b > 0: 
 
-                                if len(df_heur) != 0: 
+                            # heuristics 
+                            df_heur = get_heuristics(below_len_imgs)
 
-                                    # Rand Forest on heuristics 
-                                    clump_sums = sum(clump_model.predict(df_heur))
+                            # Rand Forest on heuristics 
+                            clump_sums = sum(clump_model.predict(df_heur))
 
-                                    # combining with indidivuals 
-                                    indivs += clump_sums 
-
-                            # results 
-                            df_results = pd.DataFrame([{
-                                'Beach': beach, 
-                                'Image': Path(path).stem,
-                                'Results': indivs,
-                                'Seal Conf Lvl': s,
-                                'Clump Conf Lvl': c,
-                                'Overlap': o,
-                                'Clump Threshold': ct 
-                            }]) 
-                            
-                            # combining 
-                            full_metrics = pd.concat([full_metrics, df_results], ignore_index=True)
-                            
-                            # reporting 
-                            it += 1 / len(paths) 
-                            if it/total >= chkpt: 
-                                print(f"{int(round(it/total, 2) * 100)}% mark reached!")
-                                chkpt = it/total + 0.1 
+                            rf = pd.DataFrame({
+                                'Beach': [beach]*b, 
+                                'Image': [Path(path).stem]*b,
+                                'Results': [clump_sums+indivs]*b,
+                                'Seal Conf Lvl': [s]*b,
+                                'Clump Conf Lvl': [c]*b,
+                                'Overlap': [o]*b,
+                                'Clump Threshold': below_len_imgs 
+                            }) 
+                        # empty set if no thresholds 
+                        else: 
+                            rf = pd.DataFrame(columns=full_metrics.columns) 
+    
+                        # combining 
+                        full_metrics = pd.concat([full_metrics, no_rf, rf], ignore_index=True)
+                        
+                        # reporting counter stats 
+                        it += len(clump_thresh)/len(paths) 
+                        if it/total >= chkpt_mark: 
+                            print(f"{int(round(it/total, 2) * 100)}% mark reached!")
+                            chkpt_mark = it/total + 0.1 
 
     return full_metrics    
 
@@ -197,11 +215,13 @@ def main():
         img_dir_dct[folder_name] = [os.path.join(path_to_beach_imgs, file) for file in os.listdir(path_to_beach_imgs)]
 
     # ground truth .csv, see above for its necessary specification 
-    ground_truth_file = input('Enter .csv file for ground truth: ')
-    df_gt = pd.read_csv(ground_truth_file)
+    ground_truth_file_path = input('Enter .csv file for ground truth: ')
+    if not os.path.isdir(ground_truth_file_path):
+        raise ValueError(f"The folder '{ground_truth_file_path}' does not exist in the repository.")
+    df_gt = pd.read_csv(ground_truth_file_path)
 
     # declaring hyperparams ranges
-    print('For the following hyperparameters, space the minimum, maximum and step with spaces (i.e. 20 40 2)')
+    print('For the following hyperparameters, space the minimum, maximum and step with spaces (e.g. 20 40 2)')
     seal_conf_min, seal_conf_max, seal_range = map(int, input('Seal Confidence Hyperparameter Range: ').split())
     clump_conf_min, clump_conf_max, clump_range = map(int, input('Clump Confidence Hyperparameter Range: ').split())
     overlap_min, overlap_max, overlap_range = map(int, input('Overlap Hyperparameter Range: ').split())
@@ -210,6 +230,7 @@ def main():
     # write results? 
     results_bool = input('Write Results? Enter Y or N: ')
 
+    # run fine tuning func 
     full_metrics = fine_tune(model, clump_model, img_dir_dct, range(seal_conf_min, seal_conf_max+1, seal_range), 
                              range(clump_conf_min, clump_conf_max+1, clump_range), range(overlap_min, overlap_max+1, overlap_range), 
                              range(clump_thresh_min, clump_thresh_max+1, clump_thresh_range)) 
@@ -220,8 +241,9 @@ def main():
     # using % error as metric 
     full_metrics['Prop Diff'] = np.abs((full_metrics['Results']-full_metrics['Ground Truth'])/full_metrics['Ground Truth']) 
 
+    # saving if specified 
     if results_bool == 'Y':
-        full_metrics.to_csv('full_metrics.csv', index=False)
+        full_metrics.to_parquet('full_metrics.parquet', index=False)
 
     # aggregating across beaches + hyperparams 
     per_error = full_metrics.groupby(['Seal Conf Lvl','Clump Conf Lvl','Overlap','Clump Threshold','Beach'])['Prop Diff'].median().reset_index(name='Median Prop Diff') 
@@ -229,7 +251,6 @@ def main():
     # selection of best hyperparams PER beach 
     print(per_error[per_error['Median Prop Diff'] == per_error.groupby('Beach')['Median Prop Diff'].transform('min')])
        
-
 if __name__ == "__main__":
     main()
 
