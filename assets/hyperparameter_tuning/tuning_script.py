@@ -15,6 +15,8 @@ import numpy as np
 import pandas as pd
 import os  
 from pathlib import Path
+from PIL.ExifTags import TAGS
+from datetime import datetime
 
 # get folder of ONE beach
 def input_folder(): 
@@ -88,7 +90,7 @@ def get_heuristics(lst):
                         'sd_b': sd_b})
 
 def fine_tune(model, clump_model, beach_dct, seal_conf, clump_conf, overlap_lst): 
-    full_metrics = pd.DataFrame(columns=['Beach', 'Image', 'Seal Conf Lvl',
+    full_metrics = pd.DataFrame(columns=['Beach', 'Image', 'Date', 'Seal Conf Lvl',
                                          'Clump Conf Lvl', 'Overlap', 'Number of Clumps', 
                                          'Number of Seals', 'Number of Seals from Clumps', 'Combined'])
 
@@ -111,8 +113,12 @@ def fine_tune(model, clump_model, beach_dct, seal_conf, clump_conf, overlap_lst)
 
                 image = Image.open(path)
 
-                clumps_img_dct = {} # images dict, conf as key 
-                clumps_pos_dct = {} # saving raw data as well, for intersections for indiv seals, conf as key  
+                # getting date
+                date_str = image._getexif()[306]
+                dt = datetime.strptime(date_str, "%Y:%m:%d %H:%M:%S")
+
+                clumps_img_dct = {} # images dict; conf as key 
+                clumps_pos_dct = {} # saving raw data as well, for intersections for indiv seals; conf as key  
                 for pred in preds: 
                     if pred['class'] == 'clump':
                         clump_x1 = pred['x'] - pred['width'] / 2
@@ -139,68 +145,32 @@ def fine_tune(model, clump_model, beach_dct, seal_conf, clump_conf, overlap_lst)
                         # checking intersections with clumps 
                         indivs = len([seal for seal in seals if not any(intersects(seal, clump) for clump in valid_clump_pos)])
 
-                        # for thresholds above and below the num of clumps 
-                        # above_len_imgs = [t for t in clump_thresh if t >= len(valid_clump_imgs)]
-                        # below_len_imgs = [t for t in clump_thresh if t < len(valid_clump_imgs)]
-                        # a = len(above_len_imgs)
-                        # b = len(below_len_imgs) 
+                        # heuristic model 
+                        if len(valid_clump_imgs) != 0: 
+                            df_heur = get_heuristics(valid_clump_imgs)
+                            clump_sums = sum(clump_model.predict(df_heur))
+                        else:
+                            clump_sums = 0 
 
-                        # for thresholds that are greater than # of clumps
-                        # if a > 0: 
-                        #     no_rf = pd.DataFrame({
-                        #         'Beach': [beach]*a, 
-                        #         'Image': [Path(path).stem]*a,
-                        #         'Results': [indivs]*a,
-                        #         'Seal Conf Lvl': [s]*a,
-                        #         'Clump Conf Lvl': [c]*a,
-                        #         'Overlap': [o]*a,
-                        #         'Clump Threshold': above_len_imgs
-                        #     }) 
-                        # # empty set if no thresholds 
-                        # else: 
-                        #     no_rf = pd.DataFrame(columns=full_metrics.columns) 
-
-                        # # for thresholds that are less than # of clumps  
-                        # if b > 0: 
-
-                        #     # heuristics 
-                        #     df_heur = get_heuristics(below_len_imgs)
-
-                        #     # Rand Forest on heuristics 
-                        #     clump_sums = sum(clump_model.predict(df_heur))
-
-                        #     rf = pd.DataFrame({
-                        #         'Beach': [beach]*b, 
-                        #         'Image': [Path(path).stem]*b,
-                        #         'Results': [clump_sums+indivs]*b,
-                        #         'Seal Conf Lvl': [s]*b,
-                        #         'Clump Conf Lvl': [c]*b,
-                        #         'Overlap': [o]*b,
-                        #         'Clump Threshold': below_len_imgs 
-                        #     }) 
-                        # # empty set if no thresholds 
-                        # else: 
-                        #     rf = pd.DataFrame(columns=full_metrics.columns) 
-                        df_heur = get_heuristics(valid_clump_imgs)
-                        clump_sums = sum(clump_model.predict(df_heur))
-
+                        # new entry 
                         new_entry = pd.DataFrame({
-                            'Beach': beach,
-                            'Image': Path(path).stem,
-                            'Seal Conf Lvl': s,
-                            'Clump Conf Lvl': c,
-                            'Overlap': o,
-                            'Number of Clumps': len(valid_clump_imgs),
-                            'Number of Seals': indivs, 
-                            'Number of Seals from Clumps': clump_sums, 
-                            'Combined': indivs+clump_sums
+                            'Beach': [beach],
+                            'Image': [Path(path).stem],
+                            'Date': [dt], 
+                            'Seal Conf Lvl': [s],
+                            'Clump Conf Lvl': [c],
+                            'Overlap': [o],
+                            'Number of Clumps': [len(valid_clump_imgs)],
+                            'Number of Seals': [indivs], 
+                            'Number of Seals from Clumps': [clump_sums], 
+                            'Combined': [indivs + clump_sums]
                         })
 
                         # combining 
                         full_metrics = pd.concat([full_metrics, new_entry], ignore_index=True)
                         
                         # reporting counter stats 
-                        it += 1/(len(paths)*len(beach_dct))
+                        it += 1/len(paths)
                         if it/total >= chkpt_mark: 
                             print(f"{int(round(it/total, 2) * 100)}% mark reached!")
                             chkpt_mark = it/total + 0.1 
@@ -226,23 +196,20 @@ def main():
         img_dir_dct[folder_name] = [os.path.join(path_to_beach_imgs, file) for file in os.listdir(path_to_beach_imgs)]
 
     # ground truth .csv, see above for its necessary specification 
-    ground_truth_file_path = input('Enter .csv file for ground truth: ')
-    if not os.path.isdir(ground_truth_file_path):
-        raise ValueError(f"The folder '{ground_truth_file_path}' does not exist in the repository.")
-    df_gt = pd.read_csv(ground_truth_file_path)
+    ground_truth = input('Enter .csv file for ground truth: ')
+    ground_truth_path = os.path.join(os.getcwd(), ground_truth)
+    if not os.path.isfile(ground_truth_path):
+        raise FileNotFoundError(f"The file '{ground_truth_path}' does not exist in the current directory.")
+    df_gt = pd.read_csv(ground_truth)
 
     # declaring hyperparams ranges
     print('For the following hyperparameters, space the minimum, maximum and step with spaces (e.g. 20 40 2)')
     seal_conf_min, seal_conf_max, seal_range = map(int, input('Seal Confidence Hyperparameter Range: ').split())
     clump_conf_min, clump_conf_max, clump_range = map(int, input('Clump Confidence Hyperparameter Range: ').split())
     overlap_min, overlap_max, overlap_range = map(int, input('Overlap Hyperparameter Range: ').split())
-    # clump_thresh_min, clump_thresh_max, clump_thresh_range = map(int, input('Two Prong Approach Clump Threshold Range: ').split())
 
     # save results to?
-    results_path_name = input("Save Results to? (Don't include .parquet in name)")
-
-    # write results? 
-    # results_bool = input('Write Results? Enter Y or N: ')
+    results_path_name = input("Save Results to? (Don't include .parquet in name) ")
 
     # run fine tuning func 
     full_metrics = fine_tune(model, clump_model, img_dir_dct, 
@@ -254,19 +221,7 @@ def main():
     # merging with ground truth
     full_metrics = pd.merge(full_metrics, df_gt, on='Image', how='left')
     full_metrics.to_parquet(f'{results_path_name}.parquet', index=False)
-
-    # using % error as metric 
-    # full_metrics['Prop Diff'] = np.abs((full_metrics['Results']-full_metrics['Ground Truth'])/full_metrics['Ground Truth']) 
-
-    # # saving if specified 
-    # if results_bool == 'Y':
-    #     full_metrics.to_parquet('full_metrics.parquet', index=False)
-
-    # # aggregating across beaches + hyperparams 
-    # per_error = full_metrics.groupby(['Seal Conf Lvl','Clump Conf Lvl','Overlap','Clump Threshold','Beach'])['Prop Diff'].median().reset_index(name='Median Prop Diff') 
-
-    # # selection of best hyperparams PER beach 
-    # print(per_error[per_error['Median Prop Diff'] == per_error.groupby('Beach')['Median Prop Diff'].transform('min')])
+    print(f'Results have been saved to {results_path_name}.parquet')
        
 if __name__ == "__main__":
     main()
