@@ -19,7 +19,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "seals-counter = elephant_seals_cli.seals_counter_cli:main",
+            "seal-counter = elephant_seals_cli.seals_counter_cli:main",
         ],
     },
     python_requires=">=3.7",

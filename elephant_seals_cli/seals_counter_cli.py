@@ -9,20 +9,15 @@ from pathlib import Path
 
 def input_folder():
     """
-    Prompts the user to choose a folder from a mounted base directory.
-    The base directory is taken from the environment variable BASE_DIR.
-    The user can enter the name of any subfolder within BASE_DIR.
+    Prompts the user to choose a folder from the current working directory.
     """
     print()
-    base_dir = os.environ.get("BASE_DIR")
-    if base_dir is None:
-        raise ValueError("Please set the BASE_DIR environment variable.")
-    
     # Display the base directory and its subdirectories for the user to choose from.
     # print(f"Mounted base directory: {base_dir}")
     print()
     print("Available subdirectories:")
-    entries = os.listdir(base_dir)
+    entries = os.listdir('.')
+    base_dir = os.getcwd()
     subdirs = [entry for entry in entries if os.path.isdir(os.path.join(base_dir, entry))]
     if not subdirs:
         print("|- No subdirectories found in the base directory.")
