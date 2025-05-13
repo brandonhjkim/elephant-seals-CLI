@@ -171,7 +171,7 @@ def main():
 
             df_heur = get_heuristics(clumps)
 
-            clump_model = load('assets/random_forest_mod1.joblib')
+            clump_model = load('./random_forest_mod1.joblib')
 
             X = df_heur.drop(columns = 'key')
             df_heur['pred_y'] = clump_model.predict(X) 
