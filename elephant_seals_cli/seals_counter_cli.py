@@ -146,10 +146,16 @@ def get_heuristics(dct):
 
 def main(): 
 
-    api_key = os.environ.get('ROBOFLOW_API_KEY')
-    if api_key is None:
-        raise ValueError("Please set the ROBOFLOW_API_KEY environment variable.")
-    rf = Roboflow(api_key=api_key) # api keys are individual, change to your own
+    # Obtain Roboflow API key: environment variable or prompt with default
+    default_api_key = "132cxQxyrOVmPD63wJrV"
+    api_key = os.environ.get("ROBOFLOW_API_KEY")
+    if not api_key:
+        user_input = input("Enter Roboflow API key (or press Enter to use default): ").strip()
+        api_key = user_input or default_api_key
+        if not api_key:
+            raise ValueError("No Roboflow API key provided.")
+        print("Using Roboflow API key:", "default" if not user_input else "user-provided")
+    rf = Roboflow(api_key=api_key)
     project = rf.workspace().project('elephant-seals-project-mark-1')
     model = project.version('16').model
 
