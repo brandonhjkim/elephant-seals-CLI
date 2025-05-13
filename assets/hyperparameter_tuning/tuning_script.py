@@ -92,7 +92,8 @@ def get_heuristics(lst):
 def fine_tune(model, clump_model, beach_dct, seal_conf, clump_conf, overlap_lst): 
     full_metrics = pd.DataFrame(columns=['Beach', 'Image', 'Date', 'Seal Conf Lvl',
                                          'Clump Conf Lvl', 'Overlap', 'Number of Clumps', 
-                                         'Number of Seals', 'Number of Seals from Clumps', 'Combined'])
+                                         'Number of Seals', 'Number of Nonintersec Seals',
+                                         'Number of Seals from Clumps', 'Combined'])
 
     # counter stats 
     it = 0
@@ -134,8 +135,8 @@ def fine_tune(model, clump_model, beach_dct, seal_conf, clump_conf, overlap_lst)
                 for c in clump_conf:
                     
                     # iterating across dicts, with confidence as key 
-                    valid_clump_imgs = [clump_img for conf, clump_img in clumps_img_dct.items() if conf >= c]
-                    valid_clump_pos = [clump_pos for conf, clump_pos in clumps_pos_dct.items() if conf >= c]
+                    valid_clump_imgs = [clump_img for conf, clump_img in clumps_img_dct.items() if conf >= c / 100]
+                    valid_clump_pos = [clump_pos for conf, clump_pos in clumps_pos_dct.items() if conf >= c / 100]
 
                     # iterating through possible seal conf params 
                     for s in seal_conf: 
@@ -161,7 +162,8 @@ def fine_tune(model, clump_model, beach_dct, seal_conf, clump_conf, overlap_lst)
                             'Clump Conf Lvl': [c],
                             'Overlap': [o],
                             'Number of Clumps': [len(valid_clump_imgs)],
-                            'Number of Seals': [indivs], 
+                            'Number of Seals': [len(seals)], 
+                            'Number of Nonintersec Seals': [len(indivs)], 
                             'Number of Seals from Clumps': [clump_sums], 
                             'Combined': [indivs + clump_sums]
                         })
