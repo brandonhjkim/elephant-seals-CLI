@@ -163,7 +163,7 @@ def fine_tune(model, clump_model, beach_dct, seal_conf, clump_conf, overlap_lst)
                             'Overlap': [o],
                             'Number of Clumps': [len(valid_clump_imgs)],
                             'Number of Seals': [len(seals)], 
-                            'Number of Nonintersec Seals': [len(indivs)], 
+                            'Number of Nonintersec Seals': [indivs], 
                             'Number of Seals from Clumps': [clump_sums], 
                             'Combined': [indivs + clump_sums]
                         })
