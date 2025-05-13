@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="elephant-seals-counter",
-    version="1.0.0",
+    version="1.1.0",
     description="CLI to count elephant seals in aerial imagery",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
