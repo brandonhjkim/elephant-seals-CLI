@@ -6,6 +6,7 @@ import pandas as pd
 import os 
 from collections import Counter 
 from pathlib import Path
+import importlib.resources
 
 def input_folder():
     """
@@ -171,7 +172,10 @@ def main():
 
             df_heur = get_heuristics(clumps)
 
-            clump_model = load('./random_forest_mod1.joblib')
+            # clump_model = load('assets/random_forest_mod1.joblib')
+            model_bytes_path = importlib.resources.path('elephant_seals_cli') / 'random_forest_mod1.joblib'
+            model_path = str(model_bytes_path)
+            clump_model = load(model_path)
 
             X = df_heur.drop(columns = 'key')
             df_heur['pred_y'] = clump_model.predict(X) 

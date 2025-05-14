@@ -9,6 +9,10 @@ setup(
     author="Elephant Seals Team",
     url="https://github.com/brandonhjkim/elephant-seals-CLI",
     packages=find_packages(),
+    include_package_data=True,
+    package_data={
+        "elephant_seals_cli": ["random_forest_mod1.joblib"]
+    },
     install_requires=[
         "roboflow==1.1.56",
         "joblib==1.4.2",
