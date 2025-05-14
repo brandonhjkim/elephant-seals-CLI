@@ -173,7 +173,7 @@ def main():
             df_heur = get_heuristics(clumps)
 
             # clump_model = load('assets/random_forest_mod1.joblib')
-            model_bytes_path = importlib.resources.path('elephant_seals_cli') / 'random_forest_mod1.joblib'
+            model_bytes_path = importlib.resources.files('elephant_seals_cli') / 'random_forest_mod1.joblib'
             model_path = str(model_bytes_path)
             clump_model = load(model_path)
 
