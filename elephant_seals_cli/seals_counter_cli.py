@@ -172,9 +172,9 @@ def main():
 
             df_heur = get_heuristics(clumps)
 
-            # clump_model = load('assets/random_forest_mod1.joblib')
-            model_bytes_path = importlib.resources.files('elephant_seals_cli') / 'random_forest_mod1.joblib'
-            model_path = str(model_bytes_path)
+            # locate the bundled joblib file within the package
+            model_bytes = importlib.resources.files('elephant_seals_cli') / 'random_forest_mod1.joblib'
+            model_path = str(model_bytes)
             clump_model = load(model_path)
 
             X = df_heur.drop(columns = 'key')
