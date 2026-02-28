@@ -1,3 +1,5 @@
+#Tara's Test Change
+
 from roboflow import Roboflow
 from PIL import Image
 from joblib import load 
@@ -152,14 +154,15 @@ def main():
     print('Welcome to Elephant Beach CLI! Please follow the prompts.')
 
     # Obtain Roboflow API key: environment variable or prompt with default
-    default_api_key = "132cxQxyrOVmPD63wJrV"
+    #Tara's modification to hide the roboflow api key
     api_key = os.environ.get("ROBOFLOW_API_KEY")
     if not api_key:
         user_input = input("Enter Roboflow API key (or press Enter to use default): ").strip()
-        api_key = user_input or default_api_key
-        if not api_key:
-            raise ValueError("No Roboflow API key provided.")
-        print("Using Roboflow API key:", "default" if not user_input else "user-provided")
+        api_key = user_input #or default_api_key
+    if not api_key:
+        raise ValueError("No Roboflow API key provided.")
+    print("Using Roboflow API key from",
+          "environment variable" if os.environ.get("ROBOFLOW_API_KEY") else "user input")
 
     while True:
         path_to_beach_imgs = input_folder()
@@ -172,9 +175,11 @@ def main():
             print('Unknown beach, not implemented yet.')
             break     
 
+        #copy and paste this code chunk down to line 183 in its own file for my own use ~ Tara
         rf = Roboflow(api_key=api_key)
         project = rf.workspace().project('elephant-seals-project-mark-1')
-        model = project.version(str(hyperparam_dct[beach_input][0])).model
+        model = project.version(str(hyperparam_dct[beach_input][0])).model #original version from last year (KEEP)
+
 
         beach_imgs_paths = [os.path.join(path_to_beach_imgs, file) for file in os.listdir(path_to_beach_imgs)]
 
@@ -186,6 +191,7 @@ def main():
 
         clumps = {key: value for key, value in clumps.items() if len(value) >= hyperparam_dct[beach_input][4]}
 
+        #for large clumps, a random forest model was used to predict the number of seals in the clump
         if len(clumps) != 0:
 
             df_heur = get_heuristics(clumps)
@@ -200,6 +206,8 @@ def main():
 
             clump_sums = df_heur.groupby('key')['pred_y'].sum().to_dict()
 
+            #total seal count = individual seals + seals inside clumps
+            #indivs: final seal counts by mosaic image
             indivs = dict(Counter(indivs) + Counter(clump_sums)) 
 
         for key, value in indivs.items():
